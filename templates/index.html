@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Agente IA - Cultivos</title>
+</head>
+<body>
+  <h1>Agente IA (Gemini + MySQL)</h1>
+  <input id="pregunta" type="text" style="width: 400px;" placeholder="Ej: ¿Promedio de pH en los últimos 7 días?">
+  <button onclick="enviar()">Preguntar</button>
+
+  <h3>Consulta SQL:</h3>
+  <pre id="sql"></pre>
+
+  <h3>Respuesta:</h3>
+  <pre id="respuesta"></pre>
+
+  <script>
+    async function enviar() {
+      const pregunta = document.getElementById('pregunta').value;
+      const res = await fetch('/ask', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({pregunta})
+      });
+      const data = await res.json();
+      document.getElementById('sql').textContent = data.consulta_sql || data.error;
+      document.getElementById('respuesta').textContent = data.respuesta || '';
+    }
+  </script>
+</body>
+</html>
