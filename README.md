@@ -140,4 +140,6 @@ El archivo `.env` debe permanecer fuera de GitHub. Para compartir la configuraci
 
 ## Autor
 
-Proyecto académico desarrollado para demostrar la integración entre inteligencia artificial, Python y bases de datos MySQL.
+Proyecto académico del SENA, desarrollado en el programa de formación
+Tecnólogo en Análisis y Desarrollo de Software (ADSO), para demostrar la
+integración entre inteligencia artificial, Python y bases de datos MySQL.
