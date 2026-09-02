@@ -11,6 +11,7 @@ app = Flask(__name__)
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 model = genai.GenerativeModel("gemini-3.6-flash")
 
+
 def get_connection():
     return pymysql.connect(
         host=os.getenv("DB_HOST"),
@@ -20,46 +21,81 @@ def get_connection():
         cursorclass=pymysql.cursors.DictCursor
     )
 
+
+def get_schema():
+    query = """
+        SELECT TABLE_NAME, COLUMN_NAME
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE()
+        ORDER BY TABLE_NAME, ORDINAL_POSITION
+    """
+
+    with get_connection() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+
+    tables = {}
+
+    for row in rows:
+        table = row["TABLE_NAME"]
+        column = row["COLUMN_NAME"]
+        tables.setdefault(table, []).append(column)
+
+    return "\n".join(
+        f"{table}({', '.join(columns)})"
+        for table, columns in tables.items()
+    )
+
+
 def clean_sql(text: str) -> str:
     text = text.strip()
     text = re.sub(r"^```sql", "", text, flags=re.IGNORECASE).strip()
     text = re.sub(r"```$", "", text).strip()
     return text
 
+
 def is_safe_select(sql: str) -> bool:
     s = sql.strip().lower()
+
     if not s.startswith("select"):
         return False
-    blocked = ["insert", "update", "delete", "drop", "alter", "truncate", "create", "grant", "revoke", "--", "/*", "*/"]
+
+    blocked = [
+        "insert", "update", "delete", "drop", "alter",
+        "truncate", "create", "grant", "revoke", "--", "/*", "*/"
+    ]
+
     return not any(word in s for word in blocked)
+
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
+
 @app.route("/ask", methods=["POST"])
 def ask():
-    data = request.get_json()
-    pregunta = data.get("pregunta", "").strip()
+    data = request.get_json(silent=True) or {}
+    pregunta = str(data.get("pregunta", "")).strip()
 
     if not pregunta:
         return jsonify({"error": "La pregunta está vacía"}), 400
 
-    schema = """
-    Tablas disponibles:
-    lotes(id, nombre, tipo_cultivo, area)
-    sensores(id, lote_id, ph, ec, temperatura, humedad, fecha)
-    riego(id, lote_id, litros, fecha)
-    """
+    schema = get_schema()
 
     prompt_sql = f"""
     Eres un asistente que genera SQL para MySQL.
+
     Reglas:
     1) Devuelve SOLO una consulta SQL.
     2) Debe ser únicamente SELECT.
-    3) Usa solo estas tablas y columnas:
+    3) Usa únicamente las tablas y columnas disponibles:
+
     {schema}
-    Pregunta del usuario: {pregunta}
+
+    Pregunta del usuario:
+    {pregunta}
     """
 
     sql_raw = model.generate_content(prompt_sql).text
@@ -72,21 +108,31 @@ def ask():
         }), 400
 
     conn = get_connection()
+
     try:
         with conn.cursor() as cursor:
             cursor.execute(sql_query)
             rows = cursor.fetchall()
     except Exception as e:
-        return jsonify({"error": f"Error SQL: {str(e)}", "consulta_sql": sql_query}), 400
+        return jsonify({
+            "error": f"Error SQL: {str(e)}",
+            "consulta_sql": sql_query
+        }), 400
     finally:
         conn.close()
 
     prompt_respuesta = f"""
     Eres un asistente académico.
     Explica en español claro y breve los resultados.
-    Pregunta: {pregunta}
-    Consulta SQL: {sql_query}
-    Resultado: {rows}
+
+    Pregunta:
+    {pregunta}
+
+    Consulta SQL:
+    {sql_query}
+
+    Resultado:
+    {rows}
     """
 
     respuesta = model.generate_content(prompt_respuesta).text
@@ -96,6 +142,7 @@ def ask():
         "respuesta": respuesta,
         "resultados": rows
     })
+
 
 if __name__ == "__main__":
     app.run(debug=True)
