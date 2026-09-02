@@ -33,7 +33,7 @@ Pregunta del usuario
 - MySQL
 - PyMySQL
 - Google Gemini API
-- HTML, CSS y JavaScript
+- HTML
 
 ## Estructura del proyecto
 
